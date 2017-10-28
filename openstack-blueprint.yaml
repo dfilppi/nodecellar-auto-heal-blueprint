@@ -12,7 +12,6 @@ imports:
   - types/nodecellar.yaml
   - types/openstack-types.yaml
   - types/haproxy/haproxy.yaml
-  - types/scale/scale.yaml
 
 inputs:
 
@@ -30,14 +29,32 @@ inputs:
     description: The user name of the agent on the instance created from the image.
     default: ubuntu
 
+  manager_network_name:
+    default: cloudify-manager-network
+
+  openstack_user:
+    description: openstack login user
+
+  openstack_password:
+    description: openstack user password
+
+  openstack_tenant:
+    description: openstack tenant name
+
+  keystone_url:
+    description: openstack keystone url
+
+  region:
+    description: openstack region
+
 dsl_definitions:
 
   openstack_config: &openstack_config
-    username: { get_secret: keystone_username }
-    password: { get_secret: keystone_password }
-    tenant_name: { get_secret: keystone_tenant_name }
-    auth_url: { get_secret: keystone_url }
-    region: { get_secret: region }
+    username: { get_input: openstack_user }
+    password: { get_input: openstack_password }
+    tenant_name: { get_input: openstack_tenant }
+    auth_url: { get_input: keystone_url }
+    region: { get_input: openstack_region }
 
 node_templates:
 
@@ -87,7 +104,7 @@ node_templates:
     type: nodecellar.nodes.MonitoredServer
     properties:
       openstack_config: *openstack_config
-      management_network_name: { get_property: [ private_network, resource_id ] }
+      management_network_name: { get_input: manager_network_name }
     relationships:
       - target: mongodb_host_port
         type: cloudify.openstack.server_connected_to_port
@@ -98,7 +115,7 @@ node_templates:
       deploy: 1
     properties:
       openstack_config: *openstack_config
-      management_network_name: { get_property: [ private_network, resource_id ] }
+      management_network_name: { get_input: manager_network_name }
     relationships:
       - target: nodejs_host_port
         type: cloudify.openstack.server_connected_to_port
@@ -140,10 +157,6 @@ node_templates:
     properties:
       openstack_config: *openstack_config
     relationships:
-      - type: cloudify.relationships.contained_in
-        target: public_network
-      - type: cloudify.relationships.depends_on
-        target: public_subnet
       - type: cloudify.openstack.port_connected_to_security_group
         target: haproxy_frontend_security_group
       - type: cloudify.openstack.port_connected_to_floating_ip
@@ -200,8 +213,7 @@ node_templates:
     type: cloudify.openstack.nodes.Subnet
     properties:
       openstack_config: *openstack_config
-      use_external_resource: true
-      resource_id: { get_secret: private_subnet_name }
+      resource_id: nodecellar_subnet
     relationships:
       - target: private_network
         type: cloudify.relationships.contained_in
@@ -211,46 +223,7 @@ node_templates:
     properties:
       openstack_config: *openstack_config
       use_external_resource: true
-      resource_id: { get_secret: private_network_name }
-
-  public_subnet:
-    type: cloudify.openstack.nodes.Subnet
-    properties:
-      openstack_config: *openstack_config
-      use_external_resource: true
-      resource_id: { get_secret: public_subnet_name }
-    relationships:
-      - target: public_network
-        type: cloudify.relationships.contained_in
-      - target: router
-        type: cloudify.openstack.subnet_connected_to_router
-
-  public_network:
-    type: cloudify.openstack.nodes.Network
-    properties:
-      openstack_config: *openstack_config
-      use_external_resource: true
-      resource_id: { get_secret: public_network_name }
-
-  router:
-    type: cloudify.openstack.nodes.Router
-    properties:
-      openstack_config: *openstack_config
-      use_external_resource: true
-      resource_id: { get_secret: router_name }
-    relationships:
-      - target: external_network
-        type: cloudify.relationships.connected_to
-
-  external_network:
-    type: cloudify.openstack.nodes.Network
-    properties:
-      openstack_config: *openstack_config
-      use_external_resource: true
-      resource_id: { get_secret: external_network_name }
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: cloudify_host_cloud_config
+      resource_id: { get_input: manager_network_name }
 
 outputs:
 
@@ -265,53 +238,6 @@ outputs:
       - '/'
 
 groups:
-
-  nodejs_host_scale_group:
-    members: [nodejs_host, nodejs_host_port]
-
-  scale_up_group:
-    members: [nodejs_host]
-    policies:
-      auto_scale_up:
-        type: scale_policy_type
-        properties:
-          policy_operates_on_group: true
-          scale_limit: 6
-          scale_direction: '<'
-          scale_threshold: 6
-          service_selector: .*nodejs_host.*.process.node.cpu.percent
-          cooldown_time: 60
-        triggers:
-          execute_scale_workflow:
-            type: cloudify.policies.triggers.execute_workflow
-            parameters:
-              workflow: scale
-              workflow_parameters:
-                delta: 1
-                node_id: nodecellar
-                scale_compute: true
-
-  scale_down_group:
-    members: [nodejs_host]
-    policies:
-      auto_scale_down:
-        type: scale_policy_type
-        properties:
-          scale_limit: 2
-          scale_direction: '>'
-          scale_threshold: 1
-          service_selector: .*nodejs_host.*.process.node.cpu.percent
-          cooldown_time: 60
-        triggers:
-          execute_scale_workflow:
-            type: cloudify.policies.triggers.execute_workflow
-            parameters:
-              workflow: scale
-              workflow_parameters:
-                delta: -1
-                node_id: nodecellar
-                scale_compute: true
-
   heal_group:
     members: [nodejs_host]
     policies:
