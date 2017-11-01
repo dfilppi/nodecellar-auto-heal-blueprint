@@ -14,14 +14,14 @@ node_types:
           user: { get_input: agent_user }
           install_method: remote
           port: 22
-          key: { get_secret: agent_key_private }
+          key: { get_input: agent_private_key }
       server:
         default:
           key_name: ''
           image: { get_input: image }
           flavor: { get_input: flavor }
       management_network_name:
-        default: { get_property: [ public_network, resource_id ] }
+        default: { get_input: manager_network_name }
     interfaces:
       cloudify.interfaces.lifecycle:
         create:
