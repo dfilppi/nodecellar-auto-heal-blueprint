@@ -1,0 +1,33 @@
+#ubuntu 14.04 image
+image: 
+
+#small image flavor
+flavor: 
+
+#name of network manager attached to
+manager_network_name: 
+
+#name of external network
+external_network_name: 
+
+#router name
+router_name:
+
+#openstack login
+openstack_user: 
+
+#openstack password
+openstack_password:
+
+#agent private key file path
+agent_private_key:
+
+#openstack tenant
+openstack_tenant:
+
+# keystone url
+keystone_url:
+
+# openstack region
+openstack_region:
+
